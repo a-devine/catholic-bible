@@ -3,7 +3,9 @@ import { Book, Search, Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, Sun, 
 
 // ============================================================
 // CATHOLIC BIBLE STRUCTURE — 73 books
-// IDs match bolls.life DRC (Douay-Rheims Challoner) translation
+// IDs below are in Catholic canonical order; they are remapped
+// to bolls.life's book IDs via BOLLS_ID before fetching.
+// Translation: NRSV Catholic Edition (NRSVCE).
 // ============================================================
 const BIBLE_DATA = {
   old: {
@@ -37,7 +39,7 @@ const BIBLE_DATA = {
           { id: 16, name: 'Nehemiah', abbr: 'Neh', chapters: 13, intro: 'Rebuilding the walls of Jerusalem.' },
           { id: 17, name: 'Tobit', abbr: 'Tob', chapters: 14, deutero: true, intro: 'A righteous family, the angel Raphael, and divine providence.' },
           { id: 18, name: 'Judith', abbr: 'Jdt', chapters: 16, deutero: true, intro: 'A widow\'s courage delivers her people.' },
-          { id: 19, name: 'Esther', abbr: 'Est', chapters: 16, intro: 'A queen saves her people; the origin of Purim.' },
+          { id: 19, name: 'Esther', abbr: 'Est', chapters: 10, intro: 'A queen saves her people; the origin of Purim.' },
           { id: 20, name: '1 Maccabees', abbr: '1 Mac', chapters: 16, deutero: true, intro: 'The Maccabean revolt and rededication of the temple.' },
           { id: 21, name: '2 Maccabees', abbr: '2 Mac', chapters: 15, deutero: true, intro: 'Martyrs, miracles, and prayer for the dead.' },
         ]
@@ -162,6 +164,48 @@ const ALL_BOOKS = [];
   });
 });
 
+// Maps our Catholic-canonical book IDs to bolls.life's book IDs.
+// bolls.life orders the deuterocanonical books separately (68-75),
+// so they don't line up with our 1-73 canonical numbering.
+const BOLLS_ID = {
+  17: 68, // Tobit
+  18: 69, // Judith
+  19: 17, // Esther
+  20: 74, // 1 Maccabees
+  21: 75, // 2 Maccabees
+  22: 18, // Job
+  23: 19, // Psalms
+  24: 20, // Proverbs
+  25: 21, // Ecclesiastes
+  26: 22, // Song of Songs
+  27: 70, // Wisdom
+  28: 71, // Sirach
+  29: 23, // Isaiah
+  30: 24, // Jeremiah
+  31: 25, // Lamentations
+  32: 73, // Baruch
+  33: 26, // Ezekiel
+  34: 27, // Daniel
+  35: 28, // Hosea
+  36: 29, // Joel
+  37: 30, // Amos
+  38: 31, // Obadiah
+  39: 32, // Jonah
+  40: 33, // Micah
+  41: 34, // Nahum
+  42: 35, // Habakkuk
+  43: 36, // Zephaniah
+  44: 37, // Haggai
+  45: 38, // Zechariah
+  46: 39, // Malachi
+  // New Testament: our 47-73 maps to bolls.life 40-66
+  47: 40, 48: 41, 49: 42, 50: 43, 51: 44, 52: 45, 53: 46, 54: 47,
+  55: 48, 56: 49, 57: 50, 58: 51, 59: 52, 60: 53, 61: 54, 62: 55,
+  63: 56, 64: 57, 65: 58, 66: 59, 67: 60, 68: 61, 69: 62, 70: 63,
+  71: 64, 72: 65, 73: 66,
+};
+const bollsId = (id) => BOLLS_ID[id] || id;
+
 // Reference parser: "John 3:16", "1 cor 13", "ps 23"
 function parseReference(input) {
   if (!input) return null;
@@ -247,7 +291,7 @@ export default function CatholicBibleApp() {
     setVerses(null);
     setHighlightVerse(scrollToVerse);
     try {
-      const res = await fetch(`https://bolls.life/get-text/DRC/${bookData.id}/${chap}/`);
+      const res = await fetch(`https://bolls.life/get-text/NRSVCE/${bollsId(bookData.id)}/${chap}/`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!Array.isArray(data) || data.length === 0) throw new Error('Empty response');
@@ -333,7 +377,7 @@ export default function CatholicBibleApp() {
     const ref = `${book.name} ${chapter}:${v.verse}`;
     const cleaned = stripHtml(v.text);
     try {
-      await navigator.clipboard.writeText(`"${cleaned}" — ${ref} (DRC)`);
+      await navigator.clipboard.writeText(`"${cleaned}" — ${ref} (NRSV-CE)`);
       setCopiedRef(ref);
       setTimeout(() => setCopiedRef(null), 1500);
     } catch (e) {}
@@ -391,7 +435,7 @@ export default function CatholicBibleApp() {
             </div>
             <div className="text-left hidden sm:block">
               <div className="font-serif text-lg leading-none">Sacred Scripture</div>
-              <div className={`text-[10px] uppercase tracking-widest ${textSubtle} mt-0.5`}>Catholic Bible · DRC</div>
+              <div className={`text-[10px] uppercase tracking-widest ${textSubtle} mt-0.5`}>Catholic Bible · NRSV-CE</div>
             </div>
           </button>
 
@@ -571,7 +615,7 @@ export default function CatholicBibleApp() {
                 <Sparkles className={`w-3 h-3 ${accent}`} />
                 <span>About this Bible</span>
               </div>
-              <p>73 books in the Catholic canon. <span className="font-bold">D</span> marks deuterocanonical books not found in Protestant Bibles. Translation: Douay-Rheims Challoner (public domain).</p>
+              <p>73 books in the Catholic canon. <span className="font-bold">D</span> marks deuterocanonical books not found in Protestant Bibles. Translation: New Revised Standard Version, Catholic Edition (NRSV-CE).</p>
             </div>
           </nav>
         </aside>
@@ -599,7 +643,7 @@ export default function CatholicBibleApp() {
                   The Catholic Bible
                 </h1>
                 <p className={`${textMuted} max-w-xl mx-auto leading-relaxed`}>
-                  73 books. The full canon — Old and New Testament, including the deuterocanonical writings. Read the Word in the Douay-Rheims translation.
+                  73 books. The full canon — Old and New Testament, including the deuterocanonical writings. Read the Word in the New Revised Standard Version, Catholic Edition.
                 </p>
               </div>
 
@@ -886,7 +930,7 @@ export default function CatholicBibleApp() {
 
       {/* ═══ FOOTER ═══ */}
       <footer className={`border-t ${border} py-4 px-4 text-center text-[11px] ${textSubtle}`}>
-        Douay-Rheims Challoner · Public Domain · Verses fetched from <span className="font-mono">bolls.life</span>
+        New Revised Standard Version, Catholic Edition · Verses fetched from <span className="font-mono">bolls.life</span>
       </footer>
     </div>
   );
