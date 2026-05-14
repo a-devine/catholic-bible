@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Book, Search, Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, Sun, Moon, X, BookOpen, Loader2, Menu, Plus, Minus, ChevronDown, Home, ArrowRight, Sparkles, Copy, Check, Cross, History } from 'lucide-react';
+import { Book, Search, Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, Sun, Moon, X, BookOpen, Loader2, Menu, Plus, Minus, ChevronDown, Home, ArrowRight, Sparkles, Copy, Check, Cross, History, CalendarDays } from 'lucide-react';
+import { fetchReadings, today, addDays, clampDate, minDate, maxDate, isSameDay, formatISO, parseISO } from './readings';
 
 // ============================================================
 // CATHOLIC BIBLE STRUCTURE — 73 books
@@ -233,7 +234,7 @@ function parseReference(input) {
 // MAIN COMPONENT
 // ============================================================
 export default function CatholicBibleApp() {
-  const [view, setView] = useState('home'); // home | book | chapter | bookmarks | search
+  const [view, setView] = useState('home'); // home | book | chapter | bookmarks | search | readings
   const [book, setBook] = useState(null);
   const [chapter, setChapter] = useState(null);
   const [verses, setVerses] = useState(null);
@@ -251,6 +252,14 @@ export default function CatholicBibleApp() {
   const [showSearch, setShowSearch] = useState(false);
   const [highlightVerse, setHighlightVerse] = useState(null);
   const [copiedRef, setCopiedRef] = useState(null);
+
+  // Daily Mass readings
+  const [readingsDate, setReadingsDate] = useState(today());
+  const [readingsData, setReadingsData] = useState(null);
+  const [readingsLoading, setReadingsLoading] = useState(false);
+  const [readingsError, setReadingsError] = useState(null);
+  const [reflectionOpen, setReflectionOpen] = useState(false);
+  const [homeReadings, setHomeReadings] = useState(null);
 
   const readingPaneRef = useRef(null);
 
@@ -353,6 +362,37 @@ export default function CatholicBibleApp() {
       }, 100);
     }
   }, [verses, highlightVerse]);
+
+  // ─── Daily Mass readings ──────────────────────────────────────
+  const loadReadings = useCallback(async (date) => {
+    const d = clampDate(date);
+    setReadingsDate(d);
+    setReadingsLoading(true);
+    setReadingsError(null);
+    setReadingsData(null);
+    setReflectionOpen(false);
+    try {
+      const data = await fetchReadings(d);
+      setReadingsData(data);
+    } catch (err) {
+      setReadingsError("Couldn't load the readings for this day. Check your connection and try again.");
+    } finally {
+      setReadingsLoading(false);
+    }
+  }, []);
+
+  const openReadings = () => {
+    setView('readings');
+    setSidebarOpen(false);
+    loadReadings(today());
+  };
+
+  const navReadingsDay = (delta) => loadReadings(addDays(readingsDate, delta));
+
+  // Prefetch today's readings once so the home card can show the day's title
+  useEffect(() => {
+    fetchReadings(today()).then(setHomeReadings).catch(() => {});
+  }, []);
 
   // ─── Bookmarks ────────────────────────────────────────────────
   const toggleBookmark = (verseObj) => {
@@ -459,6 +499,14 @@ export default function CatholicBibleApp() {
             aria-label="Search"
           >
             <Search className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={openReadings}
+            className={`p-2 rounded-lg ${hover} transition`}
+            aria-label="Daily Mass readings"
+          >
+            <CalendarDays className="w-5 h-5" />
           </button>
 
           <button
@@ -646,6 +694,29 @@ export default function CatholicBibleApp() {
                   73 books. The full canon — Old and New Testament, including the deuterocanonical writings. Read the Word in the New Revised Standard Version, Catholic Edition.
                 </p>
               </div>
+
+              {/* Today's Mass readings */}
+              <button
+                onClick={openReadings}
+                className={`
+                  w-full text-left mb-10 rounded-xl border ${border} p-5 group
+                  ${dark ? 'bg-slate-900 hover:bg-slate-800' : 'bg-white hover:bg-stone-50'}
+                  transition-all hover:-translate-y-0.5 hover:shadow-lg
+                `}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className={`inline-flex items-center gap-1.5 text-xs uppercase tracking-widest ${accent} font-medium mb-1`}>
+                      <CalendarDays className="w-3 h-3" />
+                      Today's Mass Readings
+                    </div>
+                    <div className="font-serif text-xl mt-1 truncate">
+                      {homeReadings ? homeReadings.liturgicalTitle : 'Open today’s readings'}
+                    </div>
+                  </div>
+                  <ArrowRight className={`w-5 h-5 shrink-0 ${textSubtle} group-hover:${accent} group-hover:translate-x-1 transition`} />
+                </div>
+              </button>
 
               {/* Continue reading */}
               {history.length > 0 && (
@@ -922,6 +993,129 @@ export default function CatholicBibleApp() {
                     );
                   })}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* DAILY MASS READINGS VIEW */}
+          {view === 'readings' && (
+            <div className="px-4 sm:px-8 py-8 max-w-3xl mx-auto">
+              <button onClick={() => setView('home')} className={`flex items-center gap-1 text-xs ${textMuted} hover:${accent} mb-6 transition`}>
+                <ChevronLeft className="w-3 h-3" />
+                Home
+              </button>
+
+              <h1 className="font-serif text-4xl mb-1">Daily Mass Readings</h1>
+
+              {/* Date bar */}
+              <div className={`flex items-center justify-between mt-4 mb-8 p-1.5 rounded-lg ${bgSubtle}`}>
+                <button
+                  onClick={() => navReadingsDay(-1)}
+                  disabled={isSameDay(readingsDate, minDate())}
+                  className={`p-2 rounded-md ${hover} disabled:opacity-30 disabled:cursor-not-allowed transition`}
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <input
+                  type="date"
+                  value={formatISO(readingsDate)}
+                  min={formatISO(minDate())}
+                  max={formatISO(maxDate())}
+                  onChange={(e) => e.target.value && loadReadings(parseISO(e.target.value))}
+                  className={`bg-transparent text-sm text-center outline-none ${text}`}
+                  aria-label="Pick a date"
+                />
+                <button
+                  onClick={() => navReadingsDay(1)}
+                  disabled={isSameDay(readingsDate, maxDate())}
+                  className={`p-2 rounded-md ${hover} disabled:opacity-30 disabled:cursor-not-allowed transition`}
+                  aria-label="Next day"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {readingsLoading && (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className={`w-6 h-6 ${accent} animate-spin`} />
+                </div>
+              )}
+
+              {readingsError && (
+                <div className={`p-6 rounded-lg border ${border} ${bgSubtle} text-center`}>
+                  <div className={`${textMuted} mb-3`}>{readingsError}</div>
+                  <button
+                    onClick={() => loadReadings(readingsDate)}
+                    className={`text-sm ${accent} underline`}
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+
+              {readingsData && !readingsLoading && (
+                <>
+                  <div className="text-center mb-10">
+                    <div className={`font-serif text-2xl sm:text-3xl ${accent}`}>{readingsData.liturgicalTitle}</div>
+                    {readingsData.saint && (
+                      <div className={`text-sm ${textMuted} mt-2`}>{readingsData.saint}</div>
+                    )}
+                    <div className={`mt-3 mx-auto w-12 h-px ${dark ? 'bg-amber-400/30' : 'bg-amber-700/30'}`} />
+                  </div>
+
+                  <div className="space-y-10">
+                    {readingsData.readings.map((r) => (
+                      <div key={r.slot}>
+                        <div className={`text-xs uppercase tracking-widest ${accent} font-medium mb-1`}>{r.slot}</div>
+                        {r.title && <div className={`font-serif ${textMuted} mb-3`}>{r.title}</div>}
+                        <div
+                          className="font-serif whitespace-pre-wrap"
+                          style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
+                        >
+                          {r.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {readingsData.reflection && (
+                    <div className={`mt-12 pt-6 border-t ${border}`}>
+                      <button
+                        onClick={() => setReflectionOpen(!reflectionOpen)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg ${hover} transition`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Sparkles className={`w-4 h-4 ${accent}`} />
+                          <span className="text-sm uppercase tracking-widest font-medium">Daily Reflection</span>
+                        </span>
+                        <ChevronDown className={`w-4 h-4 ${textMuted} transition-transform ${reflectionOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {reflectionOpen && (
+                        <div className="px-3 mt-3">
+                          {readingsData.reflection.title && (
+                            <div className="font-serif text-lg mb-1">{readingsData.reflection.title}</div>
+                          )}
+                          {(readingsData.reflection.author || readingsData.reflection.source) && (
+                            <div className={`text-xs ${textSubtle} mb-3`}>
+                              {[readingsData.reflection.author, readingsData.reflection.source].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                          <div
+                            className="font-serif whitespace-pre-wrap"
+                            style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
+                          >
+                            {readingsData.reflection.text}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={`mt-12 text-center text-[11px] ${textSubtle}`}>
+                    Readings · American English · provided by <span className="font-mono">evangelizo.org</span>
+                  </div>
+                </>
               )}
             </div>
           )}
